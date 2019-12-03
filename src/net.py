@@ -6,16 +6,18 @@ from distance import euclidean
 
 class Net:
     def __init__(self, lr, radius, inputSize, width, height):
+        self.inputSize = inputSize
+        self.initialLearningRate = lr
         self.learningRate = lr
+        self.initialRadius = radius
         self.radius = radius
-        self.decayConstant = 1 #??
-        self.t = 1
+        self.timeConstant = 1000
         self.map = layer.SquareMap(inputSize, width, height)
 
 
-    def decay(self):
-        self.radius = self.radius * math.exp(-self.t / self.decayConstant)
-        self.learningRate = self.learningRate * math.exp(-self.t / self.decayConstant)
+    def decay(self, iteration):
+        self.radius = self.initialRadius * math.exp(-iteration / self.timeConstant)
+        self.learningRate = self.initialLearningRate * math.exp(-iteration / self.timeConstant)
 
     def findBMU(self, sample):
         minDistance = -1
@@ -28,15 +30,39 @@ class Net:
                     bmu = n.pos
         return bmu
 
-    def neighbourhood(self, target, bmu):
-        d = euclidean(target.value, bmu.value)
-        return math.exp(-(d ** 2) / (2 * (self.radius ** 2)))
+    def getNeighbours(self, pos):
+        #TODO: implement
+
+    def neighbourhood(self, targetPos, bmuPos):
+        targetX, targetY = targetPos
+        bmuX, bmuY = bmuPos
+        distance = 0
+        if (targetX == bmuX):
+            distance = abs(bmuY - targetY)
+        elif (targetY == bmuY):
+            distance = abs(bmuX - targetX)
+        else:
+            dx = abs(bmuX - targetX)
+            dy = abs(bmuY - targetY)
+            if targetY < bmuY:
+                distance = dx + dy - int(math.ceil(dx / 2.0))
+        else:
+            distance = dx + dy - int(math.floor(dx / 2.0))
+
+        return math.exp(-(distance ** 2) / (2 * (self.radius ** 2)))
 
     def updateWeight(self, sample, targetPos, bmuPos):
         targetRow, targetCol = targetPos
-        bmuRow, bmuCol = bmuPos
         target = self.map.neurons[targetRow][targetCol]
-        bmu = self.map.neurons[bmuRow][bmuCol]
         diff = np.subtract(sample, target.value)
-        updated = np.add(target.value, np.multiply(diff, self.learningRate * self.neighbourhood(target, bmu)))
+        updated = np.add(target.value, np.multiply(diff, self.learningRate * self.neighbourhood(targetPos, bmuPos)))
         self.map.neurons[targetRow][targetCol].value = updated
+
+    def train(self):
+        for i in range(self.timeConstant):
+            sample = np.empty(self.inputSize)
+            bmuPos = self.findBMU(sample)
+            neighbours = self.getNeighbours(bmuPos)
+            for n in neighbours:
+                self.updateWeight(sample, n, bmuPos)
+            self.decay(i)
